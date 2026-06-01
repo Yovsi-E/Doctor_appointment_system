@@ -87,21 +87,28 @@ def check_rate_limit(conn, ip_address, action, limit=5, period_seconds=900):
     """
     Checks if an IP address has exceeded rate limits for an action.
     Returns True if allowed, False if blocked.
+    Uses Python-computed timestamps (database-agnostic).
     """
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=period_seconds)
+    cutoff_str = cutoff.strftime('%Y-%m-%d %H:%M:%S')
+
     cursor = conn.cursor()
     # Remove older attempts to save space
     cursor.execute("""
     DELETE FROM login_attempts 
-    WHERE timestamp < datetime('now', '-' || ? || ' seconds');
-    """, (period_seconds,))
+    WHERE timestamp < ?;
+    """, (cutoff_str,))
     
     # Count attempts in the active window
     cursor.execute("""
     SELECT COUNT(*) FROM login_attempts
-    WHERE ip_address = ? AND success = 0 AND timestamp >= datetime('now', '-' || ? || ' seconds');
-    """, (ip_address, period_seconds))
+    WHERE ip_address = ? AND success = 0 AND timestamp >= ?;
+    """, (ip_address, cutoff_str))
     
-    count = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    count = list(row.values())[0] if row else 0
     return count < limit
 
 def log_login_attempt(conn, email, ip_address, success):
