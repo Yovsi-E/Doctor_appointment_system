@@ -178,9 +178,9 @@ def init_db():
 
     conn.commit()
 
-    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'doctor';")
+    cursor.execute("SELECT COUNT(*) AS doctor_count FROM users WHERE role = 'doctor';")
     row = cursor.fetchone()
-    doctor_count = row.get('count', 0) if row else 0
+    doctor_count = row['doctor_count'] if row and 'doctor_count' in row else 0
 
     if doctor_count == 0:
         seed_doctors(cursor)
