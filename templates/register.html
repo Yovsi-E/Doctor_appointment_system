@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block title %}Patient Registration{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 2rem auto;">
+    <div class="glass-card">
+        <h2 style="margin-bottom: 0.5rem; text-align: center;">Create Patient Account</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; margin-bottom: 2rem;">
+            Please enter your information to register. All data is processed securely.
+        </p>
+
+        <form action="{{ url_for('register') }}" method="POST" id="register-form">
+            <!-- CSRF Token (handled by Flask-WTF if CSRF is configured, or simple token) -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" required minlength="2" placeholder="John Doe">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" required placeholder="john.doe@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone Number</label>
+                <input type="tel" id="phone" name="phone" required placeholder="+1 (555) 019-2834" 
+                       pattern="^\+?[0-9\s\-()]{7,20}$" 
+                       title="Please enter a valid phone number (7 to 20 digits, spaces/hyphens/parentheses allowed)">
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Format: Include country code if applicable.</span>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••">
+                <div class="pw-strength">
+                    <div class="pw-strength-bar" id="strength-bar"></div>
+                </div>
+                <div class="pw-strength-text" id="strength-text">Password Strength: Empty</div>
+                
+                <!-- Requirements Checklist -->
+                <ul style="list-style: none; font-size: 0.75rem; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                    <li id="req-length" style="color: var(--danger);">✗ Minimum 8 characters</li>
+                    <li id="req-lower" style="color: var(--danger);">✗ At least one lowercase letter</li>
+                    <li id="req-upper" style="color: var(--danger);">✗ At least one uppercase letter</li>
+                    <li id="req-number" style="color: var(--danger);">✗ At least one number</li>
+                    <li id="req-special" style="color: var(--danger);">✗ At least one special character</li>
+                </ul>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required placeholder="••••••••">
+                <span id="match-error" style="font-size: 0.75rem; color: var(--danger); display: none;">Passwords do not match.</span>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;" id="btn-submit-register">Register Account</button>
+        </form>
+
+        <p style="margin-top: 1.5rem; text-align: center; font-size: 0.9rem; color: var(--text-muted);">
+            Already have an account? <a href="{{ url_for('login') }}">Log in here</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const password = document.getElementById("password");
+    const confirm = document.getElementById("confirm_password");
+    const strengthBar = document.getElementById("strength-bar");
+    const strengthText = document.getElementById("strength-text");
+    const matchError = document.getElementById("match-error");
+    const form = document.getElementById("register-form");
+
+    // Checklist elements
+    const reqs = {
+        length: { el: document.getElementById("req-length"), test: val => val.length >= 8 },
+        lower: { el: document.getElementById("req-lower"), test: val => /[a-z]/.test(val) },
+        upper: { el: document.getElementById("req-upper"), test: val => /[A-Z]/.test(val) },
+        number: { el: document.getElementById("req-number"), test: val => /[0-9]/.test(val) },
+        special: { el: document.getElementById("req-special"), test: val => /[!@#$%^&*(),.?":{}|<>]/.test(val) }
+    };
+
+    password.addEventListener("input", function() {
+        const val = password.value;
+        let passedCount = 0;
+
+        // Run tests
+        for (const k in reqs) {
+            const passed = reqs[k].test(val);
+            if (passed) {
+                reqs[k].el.style.color = "var(--success)";
+                reqs[k].el.innerHTML = "✓ " + reqs[k].el.innerHTML.substring(2);
+                passedCount++;
+            } else {
+                reqs[k].el.style.color = "var(--danger)";
+                reqs[k].el.innerHTML = "✗ " + reqs[k].el.innerHTML.substring(2);
+            }
+        }
+
+        // Calculate strength
+        let width = 0;
+        let color = "var(--danger)";
+        let label = "Weak";
+
+        if (val.length > 0) {
+            width = (passedCount / 5) * 100;
+            if (passedCount === 5) {
+                color = "var(--success)";
+                label = "Strong";
+            } else if (passedCount >= 3) {
+                color = "#fbbf24"; // Amber/Yellow
+                label = "Medium";
+            } else {
+                color = "var(--danger)";
+                label = "Weak";
+            }
+        } else {
+            label = "Empty";
+        }
+
+        strengthBar.style.width = width + "%";
+        strengthBar.style.backgroundColor = color;
+        strengthText.innerText = "Password Strength: " + label;
+        strengthText.style.color = val.length > 0 ? color : "var(--text-muted)";
+    });
+
+    function checkPasswordsMatch() {
+        if (confirm.value && password.value !== confirm.value) {
+            matchError.style.display = "block";
+            confirm.style.borderColor = "var(--danger)";
+            return false;
+        } else {
+            matchError.style.display = "none";
+            confirm.style.borderColor = confirm.value ? "var(--success)" : "var(--border-color)";
+            return true;
+        }
+    }
+
+    password.addEventListener("input", checkPasswordsMatch);
+    confirm.addEventListener("input", checkPasswordsMatch);
+
+    form.addEventListener("submit", function(e) {
+        let isStrong = true;
+        const val = password.value;
+        for (const k in reqs) {
+            if (!reqs[k].test(val)) {
+                isStrong = false;
+                break;
+            }
+        }
+
+        if (!isStrong) {
+            e.preventDefault();
+            alert("Please make sure your password meets all strength requirements.");
+            return;
+        }
+
+        if (!checkPasswordsMatch()) {
+            e.preventDefault();
+            alert("Passwords do not match.");
+            return;
+        }
+    });
+});
+</script>
+{% endblock %}

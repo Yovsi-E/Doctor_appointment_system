@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.sqlite
+db.sqlite
+test_db.sqlite
+*.db
+.env
+uploads/*
+!uploads/.gitkeep
+security.log
+.vscode/
+*.egg-info/
+dist/
+build/

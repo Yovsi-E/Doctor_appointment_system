@@ -1,0 +1,8 @@
+Flask
+Flask-WTF
+bleach
+bcrypt
+PyJWT
+gunicorn
+psycopg2-binary
+python-dotenv

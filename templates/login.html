@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div style="max-width: 450px; margin: 3rem auto;">
+    <div class="glass-card">
+        <h2 style="margin-bottom: 0.5rem; text-align: center;">Welcome Back</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; margin-bottom: 2rem;">
+            Select your account type and log in.
+        </p>
+
+        <!-- Role sliding tab switcher -->
+        <div class="tab-container">
+            <button type="button" class="tab-btn active" id="tab-patient" onclick="switchRole('patient')">Patient Portal</button>
+            <button type="button" class="tab-btn" id="tab-doctor" onclick="switchRole('doctor')">Doctor Portal</button>
+        </div>
+
+        <form action="{{ url_for('login') }}" method="POST" id="login-form">
+            <!-- CSRF Token -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <!-- Hidden Role Field -->
+            <input type="hidden" id="role" name="role" value="patient">
+
+            <div class="form-group">
+                <label for="email" id="email-label">Patient Email Address</label>
+                <input type="email" id="email" name="email" required placeholder="name@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;" id="btn-submit-login">Log In</button>
+        </form>
+
+        <div id="register-prompt" style="margin-top: 1.5rem; text-align: center; font-size: 0.9rem; color: var(--text-muted);">
+            Don't have a patient account? <a href="{{ url_for('register') }}">Register here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchRole(role) {
+    // Set hidden field value
+    document.getElementById('role').value = role;
+
+    // Toggle active tab buttons
+    const patientTab = document.getElementById('tab-patient');
+    const doctorTab = document.getElementById('tab-doctor');
+    const emailLabel = document.getElementById('email-label');
+    const registerPrompt = document.getElementById('register-prompt');
+
+    if (role === 'patient') {
+        patientTab.classList.add('active');
+        doctorTab.classList.remove('active');
+        emailLabel.innerText = "Patient Email Address";
+        registerPrompt.style.display = "block";
+    } else {
+        doctorTab.classList.add('active');
+        patientTab.classList.remove('active');
+        emailLabel.innerText = "Doctor Email Address (Admin Login)";
+        registerPrompt.style.display = "none"; // Hide registration prompt for doctors
+    }
+}
+</script>
+{% endblock %}

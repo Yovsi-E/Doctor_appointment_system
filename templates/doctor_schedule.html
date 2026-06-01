@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Doctor Schedule{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 2rem;">
+    <!-- Welcome Header -->
+    <div class="glass-card" style="padding: 2rem; background: linear-gradient(135deg, rgba(22, 28, 45, 0.7) 0%, rgba(20, 184, 166, 0.1) 100%);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem;">Doctor Portal: Appointment Schedule</h2>
+                <p style="color: var(--text-muted);">Manage your daily consultations and view clinical details uploaded by patients.</p>
+            </div>
+            
+            <!-- Date Filter form -->
+            <form action="{{ url_for('doctor_schedule') }}" method="GET" style="display: flex; gap: 0.75rem; align-items: center;">
+                <label for="date" style="white-space: nowrap; margin-bottom: 0;">Select Date:</label>
+                <input type="date" id="date" name="date" value="{{ selected_date }}" onchange="this.form.submit()" style="width: auto;">
+            </form>
+        </div>
+    </div>
+
+    <!-- Appointments list card -->
+    <div class="glass-card" style="padding: 2rem;">
+        <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Consultations Scheduled for {{ selected_date }}
+        </h3>
+
+        {% if appointments %}
+            <div style="overflow-x: auto;">
+                <table class="styled-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 10%;">Time</th>
+                            <th style="width: 20%;">Patient Name</th>
+                            <th style="width: 15%;">Contact</th>
+                            <th style="width: 35%;">Reason for Visit / Symptoms</th>
+                            <th style="width: 20%;">Clinical Documents</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for appt in appointments %}
+                            <tr>
+                                <td style="font-weight: 700; color: var(--accent);">{{ appt.time_slot }}</td>
+                                <td style="font-weight: 600;">{{ appt.patient_name }}</td>
+                                <td>{{ appt.phone }}</td>
+                                <td style="line-height: 1.5;">
+                                    <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--primary);">
+                                        {{ appt.reason }}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if appt.document_path %}
+                                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                            <span style="font-size: 0.8rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px;" title="{{ appt.document_path.split('/')[-1] }}">
+                                                {{ appt.document_path.split('/')[-1] }}
+                                            </span>
+                                            <a href="{{ url_for('view_document', appointment_id=appt.id) }}" target="_blank" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; gap: 0.25rem;">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                                Download File
+                                            </a>
+                                        </div>
+                                    {% else %}
+                                        <span style="color: var(--text-muted); font-size: 0.9rem; font-style: italic;">No attachment</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 4rem 0; color: var(--text-muted);">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 1rem; opacity: 0.4;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                <p>No consultations scheduled for this date.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

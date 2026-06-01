@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+
+{% block title %}Book Appointment{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: 1.5rem auto;">
+    <div class="glass-card">
+        <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><polyline points="12 6 12 12 16 14"></polyline></svg>
+            Schedule a Consultation
+        </h2>
+
+        <form action="{{ url_for('book') }}" method="POST" enctype="multipart/form-data" id="booking-form">
+            <!-- CSRF Token -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- 1. Doctor Selection -->
+            <div class="form-group">
+                <label for="doctor_id">Select Specialist</label>
+                <select id="doctor_id" name="doctor_id" required onchange="fetchBookedSlots()">
+                    <option value="" disabled selected>-- Select a Doctor --</option>
+                    {% for doc in doctors %}
+                        <option value="{{ doc.id }}" {% if selected_doctor_id == doc.id|string %}selected{% endif %}>
+                            {{ doc.name }}
+                        </h4>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- 2. Date Picker -->
+            <div class="form-group">
+                <label for="date">Appointment Date</label>
+                <input type="date" id="date" name="date" required onchange="fetchBookedSlots()">
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Appointments can be scheduled up to 3 months in advance (weekdays only).</span>
+            </div>
+
+            <!-- 3. Time Slots Grid -->
+            <div class="form-group">
+                <label>Available Time Slots</label>
+                <div id="slots-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
+                    <!-- Slots will be populated by JS -->
+                </div>
+                <input type="hidden" id="time_slot" name="time_slot" required>
+                <span id="slot-error" style="font-size: 0.75rem; color: var(--danger); display: none;">Please select a time slot.</span>
+            </div>
+
+            <!-- 4. Symptoms / Reason for Visit -->
+            <div class="form-group">
+                <label for="reason">Symptoms / Reason for Visit</label>
+                <textarea id="reason" name="reason" rows="4" required placeholder="Briefly describe your symptoms or reason for visit (plain text only)..." maxlength="500"></textarea>
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-align: right;" id="char-counter">0 / 500 characters</span>
+            </div>
+
+            <!-- 5. Document Upload -->
+            <div class="form-group">
+                <label>Insurance Card or Medical Documents (Optional)</label>
+                <div class="upload-zone" id="drop-zone" onclick="document.getElementById('document').click()">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p style="font-weight: 500; font-size: 0.95rem; margin-bottom: 0.25rem;" id="upload-prompt">
+                        Drag and drop your file here, or click to browse
+                    </p>
+                    <p style="color: var(--text-muted); font-size: 0.75rem;">
+                        Accepted formats: PDF, JPG, JPEG, PNG only (Max 2MB)
+                    </p>
+                </div>
+                <input type="file" id="document" name="document" style="display: none;" onchange="handleFileSelect(this)">
+                <span id="file-error" style="font-size: 0.75rem; color: var(--danger); display: none; margin-top: 0.25rem;"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem;" id="btn-submit-booking">Confirm Booking</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Available slots definition
+const TIME_SLOTS = [
+    "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", 
+    "11:00 AM", "11:30 AM", "02:00 PM", "02:30 PM", 
+    "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM"
+];
+
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Prevent selecting past dates or weekends
+    const dateInput = document.getElementById("date");
+    const today = new Date();
+    
+    // Format date as YYYY-MM-DD
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    
+    dateInput.min = `${yyyy}-${mm}-${dd}`;
+    
+    // Prevent weekends selection in JS helper
+    dateInput.addEventListener('input', function(e) {
+        const day = new Date(this.value).getUTCDay();
+        if ([0, 6].includes(day)) {
+            e.preventDefault();
+            this.value = '';
+            alert('Consultations are only available on weekdays (Monday - Friday).');
+        }
+    });
+
+    // 2. Character counter for symptoms
+    const reasonTextarea = document.getElementById("reason");
+    const charCounter = document.getElementById("char-counter");
+    
+    reasonTextarea.addEventListener("input", function() {
+        const len = this.value.length;
+        charCounter.innerText = `${len} / 500 characters`;
+    });
+
+    // 3. Setup initial slots container
+    renderSlots([]);
+
+    // 4. Setup drag and drop events
+    const dropZone = document.getElementById("drop-zone");
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', e => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length) {
+            const fileInput = document.getElementById("document");
+            fileInput.files = files;
+            handleFileSelect(fileInput);
+        }
+    });
+
+    // Form submission validation
+    const form = document.getElementById("booking-form");
+    form.addEventListener("submit", function(e) {
+        const timeSlotVal = document.getElementById("time_slot").value;
+        const slotError = document.getElementById("slot-error");
+        
+        if (!timeSlotVal) {
+            e.preventDefault();
+            slotError.style.display = "block";
+            document.getElementById("slots-container").scrollIntoView({ behavior: 'smooth' });
+        } else {
+            slotError.style.display = "none";
+        }
+    });
+
+    // Trigger initial fetch if doctor was pre-selected from dashboard
+    if (document.getElementById("doctor_id").value) {
+        // Preset date as tomorrow
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        // If tomorrow is a weekend, skip to Monday
+        const tDay = tomorrow.getUTCDay();
+        if (tDay === 6) tomorrow.setDate(tomorrow.getDate() + 2); // Sat -> Mon
+        else if (tDay === 0) tomorrow.setDate(tomorrow.getDate() + 1); // Sun -> Mon
+
+        const tY = tomorrow.getFullYear();
+        const tM = String(tomorrow.getMonth() + 1).padStart(2, '0');
+        const tD = String(tomorrow.getDate()).padStart(2, '0');
+        dateInput.value = `${tY}-${tM}-${tD}`;
+        fetchBookedSlots();
+    }
+});
+
+// Render time slots and highlight active one
+function renderSlots(bookedSlots) {
+    const container = document.getElementById("slots-container");
+    container.innerHTML = "";
+    
+    const selectedSlot = document.getElementById("time_slot").value;
+    
+    if (TIME_SLOTS.length === 0) return;
+    
+    TIME_SLOTS.forEach(slot => {
+        const isBooked = bookedSlots.includes(slot);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-secondary";
+        btn.style.padding = "0.6rem 0.5rem";
+        btn.style.fontSize = "0.85rem";
+        btn.innerText = slot;
+        
+        if (isBooked) {
+            btn.disabled = true;
+            btn.style.opacity = "0.3";
+            btn.style.cursor = "not-allowed";
+            btn.style.textDecoration = "line-through";
+            btn.title = "This slot is already booked";
+        } else {
+            if (slot === selectedSlot) {
+                btn.className = "btn btn-accent";
+            }
+            
+            btn.onclick = function() {
+                // Clear selection on other buttons
+                const buttons = container.querySelectorAll("button");
+                buttons.forEach(b => {
+                    if (!b.disabled) {
+                        b.className = "btn btn-secondary";
+                    }
+                });
+                // Set active
+                btn.className = "btn btn-accent";
+                document.getElementById("time_slot").value = slot;
+                document.getElementById("slot-error").style.display = "none";
+            };
+        }
+        
+        container.appendChild(btn);
+    });
+}
+
+// Fetch booked slots from Flask REST API
+function fetchBookedSlots() {
+    const doctorId = document.getElementById("doctor_id").value;
+    const date = document.getElementById("date").value;
+    
+    if (!doctorId || !date) {
+        renderSlots([]);
+        return;
+    }
+    
+    // Clear previously selected slot
+    document.getElementById("time_slot").value = "";
+    
+    // Call GET /api/appointments to check taken slots
+    // To authorize patient session, cookies are sent automatically by browser
+    fetch(`/api/appointments?doctor_id=${doctorId}&date=${date}`)
+        .then(res => {
+            if (res.status === 401) {
+                alert("Session expired. Please log in again.");
+                window.location.href = "{{ url_for('login') }}";
+                return [];
+            }
+            return res.json();
+        })
+        .then(data => {
+            // Extract slots from response
+            const booked = data.appointments ? data.appointments.map(a => a.time_slot) : [];
+            renderSlots(booked);
+        })
+        .catch(err => {
+            console.error("Error fetching available slots:", err);
+            renderSlots([]);
+        });
+}
+
+// Validate file selection in JS
+function handleFileSelect(input) {
+    const fileError = document.getElementById("file-error");
+    const uploadPrompt = document.getElementById("upload-prompt");
+    const dropZone = document.getElementById("drop-zone");
+    
+    fileError.style.display = "none";
+    
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const extension = file.name.split('.').pop().toLowerCase();
+        const allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+        const maxSize = 2 * 1024 * 1024; // 2MB
+        
+        if (!allowed.includes(extension)) {
+            fileError.innerText = "Error: Invalid file type. Only PDF, JPG, JPEG, and PNG are allowed.";
+            fileError.style.display = "block";
+            input.value = "";
+            uploadPrompt.innerText = "Drag and drop your file here, or click to browse";
+            dropZone.style.borderColor = "var(--danger)";
+            return;
+        }
+        
+        if (file.size > maxSize) {
+            fileError.innerText = "Error: File exceeds the 2MB size limit.";
+            fileError.style.display = "block";
+            input.value = "";
+            uploadPrompt.innerText = "Drag and drop your file here, or click to browse";
+            dropZone.style.borderColor = "var(--danger)";
+            return;
+        }
+        
+        // Show success file selected details
+        uploadPrompt.innerText = `Selected File: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+        dropZone.style.borderColor = "var(--success)";
+    }
+}
+</script>
+{% endblock %}

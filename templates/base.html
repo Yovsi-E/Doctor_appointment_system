@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Doctor Booking{% endblock %} | Secure Med</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header>
+        <nav class="nav-container">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                <span>SecureMed</span>
+            </div>
+            <ul class="nav-links">
+                {% if session.get('user_id') %}
+                    {% if session.get('role') == 'patient' %}
+                        <li><a href="{{ url_for('dashboard') }}" id="nav-dashboard">Dashboard</a></li>
+                        <li><a href="{{ url_for('book') }}" id="nav-book">Book Appointment</a></li>
+                    {% elif session.get('role') == 'doctor' %}
+                        <li><a href="{{ url_for('doctor_schedule') }}" id="nav-schedule">My Schedule</a></li>
+                    {% endif %}
+                    <li><span style="color: var(--text-muted); font-size: 0.9rem;">Logged in as: <strong>{{ session.get('name') }}</strong></span></li>
+                    <li><a href="{{ url_for('logout') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;" id="nav-logout">Logout</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('login') }}" id="nav-login">Login</a></li>
+                    <li><a href="{{ url_for('register') }}" class="btn btn-primary" style="padding: 0.5rem 1.25rem; color: white;" id="nav-register">Sign Up</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="alerts">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'error' else 'danger' }}">
+                            {% if category == 'success' %}
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            {% else %}
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                            {% endif %}
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2026 SecureMed. All patient data is encrypted and handled under strict confidentiality protocols. Session inactivity watchdog is active.</p>
+    </footer>
+
+    {% if session.get('user_id') %}
+    <!-- Inactivity Watchdog -->
+    <script>
+        (function() {
+            // Log out user after 15 minutes (900 seconds) of inactivity
+            // Warn at 14 minutes
+            const INACTIVITY_LIMIT = 15 * 60 * 1000; 
+            const WARNING_LIMIT = 14 * 60 * 1000;
+            let warningTimeout;
+            let logoutTimeout;
+
+            function resetTimer() {
+                clearTimeout(warningTimeout);
+                clearTimeout(logoutTimeout);
+
+                warningTimeout = setTimeout(showInactivityWarning, WARNING_LIMIT);
+                logoutTimeout = setTimeout(logoutUser, INACTIVITY_LIMIT);
+            }
+
+            function showInactivityWarning() {
+                // Creates a sleek alert bar at top
+                let warnDiv = document.getElementById('inactivity-warning');
+                if (!warnDiv) {
+                    warnDiv = document.createElement('div');
+                    warnDiv.id = 'inactivity-warning';
+                    warnDiv.style.position = 'fixed';
+                    warnDiv.style.top = '0';
+                    warnDiv.style.left = '0';
+                    warnDiv.style.width = '100%';
+                    warnDiv.style.backgroundColor = 'var(--danger)';
+                    warnDiv.style.color = '#fff';
+                    warnDiv.style.padding = '10px';
+                    warnDiv.style.textAlign = 'center';
+                    warnDiv.style.zIndex = '9999';
+                    warnDiv.style.fontWeight = 'bold';
+                    warnDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.5)';
+                    warnDiv.innerHTML = 'You have been inactive for a while. You will be logged out in 60 seconds due to medical confidentiality guidelines. Move your mouse or type to stay logged in.';
+                    document.body.appendChild(warnDiv);
+                }
+            }
+
+            function logoutUser() {
+                window.location.href = "{{ url_for('logout') }}?reason=inactivity";
+            }
+
+            function clearWarning() {
+                const warnDiv = document.getElementById('inactivity-warning');
+                if (warnDiv) {
+                    warnDiv.remove();
+                }
+            }
+
+            // Events that signal user activity
+            const activityEvents = ['mousemove', 'mousedown', 'keypress', 'touchadd', 'scroll', 'click'];
+            
+            activityEvents.forEach(eventName => {
+                document.addEventListener(eventName, () => {
+                    clearWarning();
+                    resetTimer();
+                }, { passive: true });
+            });
+
+            // Initialize timer on load
+            resetTimer();
+        })();
+    </script>
+    {% endif %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
