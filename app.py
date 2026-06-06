@@ -744,7 +744,21 @@ def api_appointments_cancel(appointment_id):
 
 
 # Initialize database on startup
-database.init_db()
+try:
+    database.init_db()
+except Exception as e:
+    import logging as _logging
+    _logging.getLogger('security').error(f"Database init failed: {e}")
+
+# Health check endpoint for Render
+@app.route('/health')
+def health():
+    try:
+        conn = database.get_db_connection()
+        conn.close()
+        return jsonify({"status": "healthy", "db": "connected"}), 200
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 if __name__ == '__main__':
     # Running locally - Secure configurations
