@@ -108,7 +108,14 @@ def check_rate_limit(conn, ip_address, action, limit=5, period_seconds=900):
     """, (ip_address, cutoff_str))
     
     row = cursor.fetchone()
-    count = list(row.values())[0] if row else 0
+    if row is None:
+        return True
+    if hasattr(row, 'values'):
+        count = list(row.values())[0]
+    elif isinstance(row, (tuple, list)):
+        count = row[0]
+    else:
+        count = list(dict(row).values())[0]
     return count < limit
 
 def log_login_attempt(conn, email, ip_address, success):

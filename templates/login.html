@@ -14,6 +14,7 @@
         <div class="tab-container">
             <button type="button" class="tab-btn active" id="tab-patient" onclick="switchRole('patient')">Patient Portal</button>
             <button type="button" class="tab-btn" id="tab-doctor" onclick="switchRole('doctor')">Doctor Portal</button>
+            <button type="button" class="tab-btn" id="tab-admin" onclick="switchRole('admin')">Admin</button>
         </div>
 
         <form action="{{ url_for('login') }}" method="POST" id="login-form">
@@ -46,25 +47,28 @@
 {% block scripts %}
 <script>
 function switchRole(role) {
-    // Set hidden field value
     document.getElementById('role').value = role;
 
-    // Toggle active tab buttons
     const patientTab = document.getElementById('tab-patient');
     const doctorTab = document.getElementById('tab-doctor');
+    const adminTab = document.getElementById('tab-admin');
     const emailLabel = document.getElementById('email-label');
     const registerPrompt = document.getElementById('register-prompt');
 
+    [patientTab, doctorTab, adminTab].forEach(t => t.classList.remove('active'));
+
     if (role === 'patient') {
         patientTab.classList.add('active');
-        doctorTab.classList.remove('active');
         emailLabel.innerText = "Patient Email Address";
         registerPrompt.style.display = "block";
-    } else {
+    } else if (role === 'doctor') {
         doctorTab.classList.add('active');
-        patientTab.classList.remove('active');
-        emailLabel.innerText = "Doctor Email Address (Admin Login)";
-        registerPrompt.style.display = "none"; // Hide registration prompt for doctors
+        emailLabel.innerText = "Doctor Email Address";
+        registerPrompt.style.display = "none";
+    } else {
+        adminTab.classList.add('active');
+        emailLabel.innerText = "Admin Email Address";
+        registerPrompt.style.display = "none";
     }
 }
 </script>

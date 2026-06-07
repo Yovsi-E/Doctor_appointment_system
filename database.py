@@ -112,7 +112,7 @@ def init_db():
             email TEXT UNIQUE NOT NULL,
             phone TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('patient', 'doctor')),
+            role TEXT NOT NULL CHECK(role IN ('patient', 'doctor', 'admin')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
@@ -147,7 +147,7 @@ def init_db():
             email TEXT UNIQUE NOT NULL,
             phone TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('patient', 'doctor')),
+            role TEXT NOT NULL CHECK(role IN ('patient', 'doctor', 'admin')),
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
@@ -178,12 +178,29 @@ def init_db():
 
     conn.commit()
 
-    cursor.execute("SELECT COUNT(*) AS doctor_count FROM users WHERE role = 'doctor';")
+    # Migrate role constraint for PostgreSQL
+    if USE_POSTGRES:
+        try:
+            cursor.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;")
+            cursor.execute("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('patient', 'doctor', 'admin'));")
+            conn.commit()
+        except Exception:
+            pass
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'doctor';")
     row = cursor.fetchone()
-    doctor_count = row['doctor_count'] if row and 'doctor_count' in row else 0
+    doctor_count = list(row.values())[0] if row else 0
 
     if doctor_count == 0:
         seed_doctors(cursor)
+        conn.commit()
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'admin';")
+    row = cursor.fetchone()
+    admin_count = list(row.values())[0] if row else 0
+
+    if admin_count == 0:
+        seed_admin(cursor)
         conn.commit()
 
     conn.close()
@@ -209,6 +226,19 @@ def seed_doctors(cursor):
         """, (name, email, phone, pwd_hash))
 
     print("Doctors seeded successfully.")
+
+
+def seed_admin(cursor):
+    password = b"AdminPass123!"
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password, salt).decode('utf-8')
+
+    cursor.execute("""
+    INSERT INTO users (name, email, phone, password_hash, role)
+    VALUES (?, ?, ?, ?, 'admin');
+    """, ("System Administrator", "admin@medsecure.com", "+1-555-0000", hashed))
+
+    print("Admin account seeded successfully.")
 
 
 if __name__ == '__main__':

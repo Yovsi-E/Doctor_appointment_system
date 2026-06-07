@@ -129,6 +129,8 @@ def index():
             return redirect(url_for('dashboard'))
         elif session['role'] == 'doctor':
             return redirect(url_for('doctor_schedule'))
+        elif session['role'] == 'admin':
+            return redirect(url_for('admin_panel'))
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -211,7 +213,7 @@ def login():
         password = request.form.get('password')
         role = request.form.get('role', 'patient')
 
-        if role not in ('patient', 'doctor'):
+        if role not in ('patient', 'doctor', 'admin'):
             role = 'patient'
 
         conn = database.get_db_connection()
@@ -244,8 +246,10 @@ def login():
             
             if role == 'patient':
                 return redirect(url_for('dashboard'))
-            else:
+            elif role == 'doctor':
                 return redirect(url_for('doctor_schedule'))
+            else:
+                return redirect(url_for('admin_panel'))
         else:
             # Failed Login
             security.log_login_attempt(conn, email, client_ip, success=False)
@@ -741,6 +745,92 @@ def api_appointments_cancel(appointment_id):
         log_security_event(logging.ERROR, f"API cancel error: {str(e)}")
         conn.close()
         return jsonify({"error": "Database error"}), 500
+
+
+# --- ADMIN ROUTES ---
+
+@app.route('/admin')
+def admin_panel():
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email, phone, created_at FROM users WHERE role = 'doctor' ORDER BY name;")
+    doctors = cursor.fetchall()
+    conn.close()
+
+    return render_template('admin.html', doctors=doctors)
+
+
+@app.route('/admin/add_doctor', methods=['POST'])
+def add_doctor():
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    name = request.form.get('name', '').strip()
+    email = request.form.get('email', '').strip()
+    phone = request.form.get('phone', '').strip()
+    password = request.form.get('password', '')
+
+    if not name or not email or not phone or not password:
+        flash("All fields are required.", "error")
+        return redirect(url_for('admin_panel'))
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?;", (email,))
+    if cursor.fetchone():
+        conn.close()
+        flash("A user with this email already exists.", "error")
+        return redirect(url_for('admin_panel'))
+
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+    try:
+        cursor.execute("""
+        INSERT INTO users (name, email, phone, password_hash, role)
+        VALUES (?, ?, ?, ?, 'doctor');
+        """, (name, email, phone, hashed))
+        conn.commit()
+        flash(f"Doctor '{name}' added successfully.", "success")
+    except Exception as e:
+        log_security_event(logging.ERROR, f"DB add_doctor error: {str(e)}")
+        flash("Failed to add doctor.", "error")
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_panel'))
+
+
+@app.route('/admin/delete_doctor/<int:doctor_id>', methods=['POST'])
+def delete_doctor(doctor_id):
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM users WHERE id = ? AND role = 'doctor';", (doctor_id,))
+    doctor = cursor.fetchone()
+
+    if not doctor:
+        conn.close()
+        flash("Doctor not found.", "error")
+        return redirect(url_for('admin_panel'))
+
+    try:
+        cursor.execute("DELETE FROM appointments WHERE doctor_id = ?;", (doctor_id,))
+        cursor.execute("DELETE FROM users WHERE id = ? AND role = 'doctor';", (doctor_id,))
+        conn.commit()
+        flash(f"Doctor '{doctor['name']}' and their appointments deleted.", "success")
+    except Exception as e:
+        log_security_event(logging.ERROR, f"DB delete_doctor error: {str(e)}")
+        flash("Failed to delete doctor.", "error")
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_panel'))
 
 
 # Initialize database on startup

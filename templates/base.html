@@ -23,6 +23,8 @@
                         <li><a href="{{ url_for('book') }}" id="nav-book">Book Appointment</a></li>
                     {% elif session.get('role') == 'doctor' %}
                         <li><a href="{{ url_for('doctor_schedule') }}" id="nav-schedule">My Schedule</a></li>
+                    {% elif session.get('role') == 'admin' %}
+                        <li><a href="{{ url_for('admin_panel') }}" id="nav-admin">Admin Panel</a></li>
                     {% endif %}
                     <li><span style="color: var(--text-muted); font-size: 0.9rem;">Logged in as: <strong>{{ session.get('name') }}</strong></span></li>
                     <li><a href="{{ url_for('logout') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;" id="nav-logout">Logout</a></li>
