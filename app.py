@@ -845,8 +845,18 @@ except Exception as e:
 def health():
     try:
         conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users;")
+        row = cursor.fetchone()
+        user_count = list(row.values())[0] if row else 0
         conn.close()
-        return jsonify({"status": "healthy", "db": "connected"}), 200
+        db_type = "PostgreSQL" if database.USE_POSTGRES else "SQLite"
+        return jsonify({
+            "status": "healthy",
+            "db": "connected",
+            "db_type": db_type,
+            "users": user_count
+        }), 200
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 

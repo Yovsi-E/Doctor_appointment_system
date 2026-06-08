@@ -92,8 +92,14 @@ class DbConnection:
 
 def get_db_connection():
     if USE_POSTGRES:
-        conn = psycopg2.connect(DATABASE_URL)
-        return DbConnection(conn)
+        try:
+            conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+            return DbConnection(conn)
+        except Exception as e:
+            print(f"PostgreSQL connection failed: {e}, falling back to SQLite")
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            return DbConnection(conn)
     else:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -101,7 +107,19 @@ def get_db_connection():
 
 
 def init_db():
-    conn = get_db_connection()
+    conn = None
+    try:
+        if USE_POSTGRES:
+            conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+            conn = DbConnection(conn)
+        else:
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            conn = DbConnection(conn)
+    except Exception as e:
+        print(f"Database init connection failed: {e}")
+        return
+
     cursor = conn.cursor()
 
     if USE_POSTGRES:
