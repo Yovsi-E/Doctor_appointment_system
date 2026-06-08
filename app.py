@@ -231,6 +231,15 @@ def login():
         user = cursor.fetchone()
 
         if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            # Check if 2FA is enabled
+            if user.get('totp_enabled'):
+                session.clear()
+                session['pending_2fa_user_id'] = user['id']
+                session['pending_2fa_role'] = user['role']
+                session['pending_2fa_name'] = user['name']
+                log_security_event(logging.WARNING, f"User {email} logged in, awaiting 2FA verification")
+                return redirect(url_for('verify_2fa'))
+
             # Successful Login - Session Fixation Prevention
             session.clear()
             session['user_id'] = user['id']
@@ -288,6 +297,11 @@ def dashboard():
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
+    # Get user 2FA status
+    cursor.execute("SELECT totp_enabled FROM users WHERE id = ?;", (session['user_id'],))
+    user_2fa = cursor.fetchone()
+    user_totp_enabled = user_2fa['totp_enabled'] if user_2fa else 0
+
     # Search doctors if requested
     doctors = []
     if clean_search:
@@ -311,6 +325,7 @@ def dashboard():
     return render_template('dashboard.html', 
                            appointments=appointments, 
                            doctors=doctors, 
+                           user_totp_enabled=user_totp_enabled,
                            search_query=clean_search)
 
 @app.route('/book', methods=['GET', 'POST'])
@@ -745,6 +760,116 @@ def api_appointments_cancel(appointment_id):
         log_security_event(logging.ERROR, f"API cancel error: {str(e)}")
         conn.close()
         return jsonify({"error": "Database error"}), 500
+
+
+# --- TWO-FACTOR AUTHENTICATION ROUTES ---
+
+@app.route('/setup_2fa', methods=['GET', 'POST'])
+def setup_2fa():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        secret = session.get('temp_totp_secret')
+
+        if not secret or not code:
+            flash("Invalid request. Please try again.", "error")
+            conn.close()
+            return redirect(url_for('setup_2fa'))
+
+        if security.verify_totp(secret, code):
+            cursor.execute("UPDATE users SET totp_secret = ?, totp_enabled = 1 WHERE id = ?;",
+                           (secret, session['user_id']))
+            conn.commit()
+            session.pop('temp_totp_secret', None)
+            flash("Two-factor authentication enabled successfully.", "success")
+            conn.close()
+            return redirect(url_for('dashboard') if session['role'] == 'patient' else url_for('doctor_schedule'))
+        else:
+            flash("Invalid verification code. Please try again.", "error")
+            conn.close()
+            return redirect(url_for('setup_2fa'))
+
+    cursor.execute("SELECT totp_enabled, email FROM users WHERE id = ?;", (session['user_id'],))
+    user = cursor.fetchone()
+    conn.close()
+
+    if user and user['totp_enabled']:
+        flash("Two-factor authentication is already enabled.", "info")
+        return redirect(url_for('dashboard') if session['role'] == 'patient' else url_for('doctor_schedule'))
+
+    secret = security.generate_totp_secret()
+    session['temp_totp_secret'] = secret
+    qr_data_uri = security.generate_qr_code_data_uri(secret, user['email'])
+    return render_template('setup_2fa.html', qr_data_uri=qr_data_uri, secret=secret)
+
+
+@app.route('/disable_2fa', methods=['POST'])
+def disable_2fa():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    code = request.form.get('code', '').strip()
+    if not code:
+        flash("Please enter your verification code to disable 2FA.", "error")
+        return redirect(request.referrer or url_for('dashboard'))
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT totp_secret FROM users WHERE id = ?;", (session['user_id'],))
+    user = cursor.fetchone()
+
+    if user and user['totp_secret'] and security.verify_totp(user['totp_secret'], code):
+        cursor.execute("UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?;",
+                       (session['user_id'],))
+        conn.commit()
+        flash("Two-factor authentication disabled.", "success")
+    else:
+        flash("Invalid verification code.", "error")
+
+    conn.close()
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/verify_2fa', methods=['GET', 'POST'])
+def verify_2fa():
+    if 'pending_2fa_user_id' not in session:
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        user_id = session['pending_2fa_user_id']
+
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT totp_secret, name, role FROM users WHERE id = ?;", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if user and user['totp_secret'] and security.verify_totp(user['totp_secret'], code):
+            session.clear()
+            session['user_id'] = user_id
+            session['name'] = session.pop('pending_2fa_name')
+            session['role'] = session.pop('pending_2fa_role')
+            session['last_activity'] = datetime.now(timezone.utc).isoformat()
+            session.pop('pending_2fa_user_id', None)
+
+            log_security_event(logging.WARNING, f"User ID {user_id} completed 2FA verification")
+
+            if session['role'] == 'patient':
+                return redirect(url_for('dashboard'))
+            elif session['role'] == 'doctor':
+                return redirect(url_for('doctor_schedule'))
+            else:
+                return redirect(url_for('admin_panel'))
+        else:
+            flash("Invalid verification code. Please try again.", "error")
+
+    return render_template('verify_2fa.html')
 
 
 # --- ADMIN ROUTES ---

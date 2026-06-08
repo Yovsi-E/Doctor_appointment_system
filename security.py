@@ -5,6 +5,7 @@ import bleach
 import jwt
 import datetime
 from werkzeug.utils import secure_filename
+import pyotp
 
 # Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
@@ -146,3 +147,28 @@ def decode_jwt_token(token):
         return None
     except jwt.InvalidTokenError:
         return None
+
+# Two-Factor Authentication Helpers
+def generate_totp_secret():
+    return pyotp.random_base32()
+
+def get_totp_uri(secret, email):
+    return pyotp.totp.TOTP(secret).provisioning_uri(
+        name=email,
+        issuer_name='SecureMed'
+    )
+
+def verify_totp(secret, code):
+    totp = pyotp.TOTP(secret)
+    return totp.verify(code)
+
+def generate_qr_code_data_uri(secret, email):
+    import qrcode
+    import io
+    import base64
+    uri = get_totp_uri(secret, email)
+    img = qrcode.make(uri)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('utf-8')

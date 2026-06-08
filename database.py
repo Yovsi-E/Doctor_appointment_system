@@ -141,6 +141,8 @@ def init_db():
             phone TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL CHECK(role IN ('patient', 'doctor', 'admin')),
+            totp_secret TEXT,
+            totp_enabled INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
@@ -176,6 +178,8 @@ def init_db():
             phone TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL CHECK(role IN ('patient', 'doctor', 'admin')),
+            totp_secret TEXT,
+            totp_enabled INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
@@ -211,6 +215,29 @@ def init_db():
         try:
             cursor.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;")
             cursor.execute("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('patient', 'doctor', 'admin'));")
+            conn.commit()
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;")
+            conn.commit()
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled INTEGER DEFAULT 0;")
+            conn.commit()
+        except Exception:
+            pass
+    else:
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT;")
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0;")
             conn.commit()
         except Exception:
             pass

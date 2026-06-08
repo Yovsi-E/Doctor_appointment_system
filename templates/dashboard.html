@@ -129,9 +129,17 @@
                 <a href="{{ url_for('book') }}" class="btn btn-primary" style="width: 100%;">
                     Book Appointment
                 </a>
-                
+
+                <a href="{{ url_for('setup_2fa') }}" class="btn btn-secondary" style="width: 100%;">
+                    {% if user_totp_enabled %}
+                        Two-Factor: Enabled
+                    {% else %}
+                        Enable Two-Factor Auth
+                    {% endif %}
+                </a>
+
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;">
-                
+
                 <h4 style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">Confidentiality Notice</h4>
                 <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
                     Your medical history and upload materials are protected via tokenized endpoints and strict role validations. Make sure to log out if using a public computer.
