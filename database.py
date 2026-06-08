@@ -3,6 +3,16 @@ import sqlite3
 import bcrypt
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+PGSQL_URL = None
+
+if DATABASE_URL:
+    if 'sslmode=' not in DATABASE_URL:
+        if '?' in DATABASE_URL:
+            PGSQL_URL = DATABASE_URL + '&sslmode=require'
+        else:
+            PGSQL_URL = DATABASE_URL + '?sslmode=require'
+    else:
+        PGSQL_URL = DATABASE_URL
 
 USE_POSTGRES = False
 psycopg2 = None
@@ -93,7 +103,7 @@ class DbConnection:
 def get_db_connection():
     if USE_POSTGRES:
         try:
-            conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+            conn = psycopg2.connect(PGSQL_URL)
             return DbConnection(conn)
         except Exception as e:
             print(f"PostgreSQL connection failed: {e}, falling back to SQLite")
@@ -110,7 +120,7 @@ def init_db():
     conn = None
     try:
         if USE_POSTGRES:
-            conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+            conn = psycopg2.connect(PGSQL_URL)
             conn = DbConnection(conn)
         else:
             conn = sqlite3.connect(DB_PATH)
